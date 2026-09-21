@@ -1,0 +1,619 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  FACULTY
+  INDUSTRY
+  ADMIN
+}
+
+enum ApplicationStatus {
+  APPLIED
+  SHORTLISTED
+  INTERVIEW
+  OFFERED
+  JOINED
+  REJECTED
+}
+
+enum ProgramType {
+  COURSE
+  CERTIFICATION
+  WORKSHOP
+  MENTORSHIP
+}
+
+enum InternshipType {
+  INTERNSHIP
+  PROJECT
+  APPRENTICESHIP
+}
+
+enum OpportunityType {
+  INTERNSHIP
+  FACULTY_TRAINING
+  FDP
+  CONSULTANCY
+  RESEARCH
+}
+
+enum NotificationType {
+  APPLICATION
+  MESSAGE
+  SYSTEM
+  MENTORSHIP
+  WORKSHOP
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         Role
+  isVerified   Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  student      StudentProfile?
+  faculty      FacultyProfile?
+  industry     IndustryProfile?
+  admin        AdminProfile?
+  notifications Notification[]
+  sentMessages  Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+  documents    Document[]
+}
+
+model StudentProfile {
+  id         String  @id @default(cuid())
+  userId     String  @unique
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName   String
+  rollNumber String?
+  branch     String
+  department String
+  cgpa       Float?
+  year       Int
+  college    String
+  city       String
+  phone      String?
+  bio        String?
+  avatarUrl  String?
+  codingStreak Int   @default(0)
+
+  skills           StudentSkill[]
+  assessmentAttempts AssessmentAttempt[]
+  codingSubmissions  CodingSubmission[]
+  portfolio        Portfolio?
+  applications     Application[]
+  enrollments      ProgramEnrollment[]
+  mentorshipRequests MentorshipRequest[] @relation("MenteeRequests")
+  workshopRegs     WorkshopRegistration[]
+  challengeSubs    ChallengeSubmission[]
+  projectMembers   ProjectMember[]
+  progressLogs     ProgressLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model FacultyProfile {
+  id           String  @id @default(cuid())
+  userId       String  @unique
+  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName     String
+  designation  String
+  department   String
+  college      String
+  city         String
+  specialization String?
+  phone        String?
+
+  facultyApplications FacultyApplication[]
+  mentorshipSessions  MentorshipRequest[] @relation("MentorSessions")
+  workshopRegs        WorkshopRegistration[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model IndustryProfile {
+  id          String  @id @default(cuid())
+  userId      String  @unique
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName String
+  sector      String
+  city        String
+  website     String?
+  description String?
+  logoUrl     String?
+  isApproved  Boolean @default(false)
+
+  internships   Internship[]
+  jobs          JobPosting[]
+  programs      LearningProgram[]
+  assessments   Assessment[]
+  liveProjects  LiveProject[]
+  workshops     Workshop[]
+  challenges    InnovationChallenge[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AdminProfile {
+  id       String @id @default(cuid())
+  userId   String @unique
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName String
+  college  String
+}
+
+model Skill {
+  id       String @id @default(cuid())
+  name     String @unique
+  category String
+
+  studentSkills StudentSkill[]
+  jobSkills     JobSkillRequirement[]
+  internshipSkills InternshipSkill[]
+  programSkills ProgramSkill[]
+}
+
+model StudentSkill {
+  id        String @id @default(cuid())
+  studentId String
+  skillId   String
+  level     Int    @default(1)
+  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  skill     Skill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, skillId])
+}
+
+model Assessment {
+  id          String @id @default(cuid())
+  title       String
+  description String?
+  type        String
+  durationMin Int
+  industryId  String?
+  industry    IndustryProfile? @relation(fields: [industryId], references: [id])
+  isActive    Boolean @default(true)
+
+  sections AssessmentSection[]
+  questions Question[]
+  attempts AssessmentAttempt[]
+
+  createdAt DateTime @default(now())
+}
+
+model AssessmentSection {
+  id           String @id @default(cuid())
+  assessmentId String
+  name         String
+  order        Int
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  questions    Question[]
+}
+
+model Question {
+  id           String @id @default(cuid())
+  assessmentId String
+  sectionId    String?
+  text         String
+  options      Json
+  correctIndex Int
+  points       Int    @default(1)
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  section      AssessmentSection? @relation(fields: [sectionId], references: [id])
+}
+
+model AssessmentAttempt {
+  id           String @id @default(cuid())
+  assessmentId String
+  studentId    String
+  score        Float
+  maxScore     Float
+  answers      Json
+  timeTakenSec Int
+  completedAt  DateTime @default(now())
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  student      StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model CodingProblem {
+  id          String @id @default(cuid())
+  title       String
+  slug        String @unique
+  difficulty  String
+  tags        String[]
+  description String
+  constraints String?
+  examples    Json
+  testCases   Json
+  starterCode String @default("function solve(input) {\n  // your code\n}\n")
+  isActive    Boolean @default(true)
+
+  submissions CodingSubmission[]
+  createdAt   DateTime @default(now())
+}
+
+model CodingSubmission {
+  id         String @id @default(cuid())
+  problemId  String
+  studentId  String
+  code       String
+  language   String @default("javascript")
+  passed     Boolean
+  runtimeMs  Int
+  results    Json
+  submittedAt DateTime @default(now())
+  problem    CodingProblem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  student    StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model Portfolio {
+  id          String @id @default(cuid())
+  studentId   String @unique
+  publicSlug  String @unique
+  headline    String?
+  summary     String?
+  projects    Json   @default("[]")
+  achievements Json  @default("[]")
+  internships Json   @default("[]")
+  student     StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  certificates Certificate[]
+  updatedAt   DateTime @updatedAt
+}
+
+model Certificate {
+  id             String @id @default(cuid())
+  portfolioId    String?
+  enrollmentId   String? @unique
+  title          String
+  verificationId String @unique
+  issuedAt       DateTime @default(now())
+  portfolio      Portfolio? @relation(fields: [portfolioId], references: [id])
+  enrollment     ProgramEnrollment? @relation(fields: [enrollmentId], references: [id])
+}
+
+model Internship {
+  id          String @id @default(cuid())
+  industryId  String
+  title       String
+  description String
+  type        InternshipType @default(INTERNSHIP)
+  stipend     Int
+  duration    String
+  location    String
+  deadline    DateTime
+  openings    Int    @default(1)
+  minCgpa     Float?
+  isActive    Boolean @default(true)
+
+  industry     IndustryProfile @relation(fields: [industryId], references: [id], onDelete: Cascade)
+  skills       InternshipSkill[]
+  applications Application[]
+
+  createdAt DateTime @default(now())
+}
+
+model InternshipSkill {
+  id           String @id @default(cuid())
+  internshipId String
+  skillId      String
+  weight       Int    @default(1)
+  internship   Internship @relation(fields: [internshipId], references: [id], onDelete: Cascade)
+  skill        Skill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([internshipId, skillId])
+}
+
+model JobPosting {
+  id             String @id @default(cuid())
+  industryId     String
+  title          String
+  description    String
+  packageMin     Int
+  packageMax     Int
+  location       String
+  qualifications String
+  deadline       DateTime
+  minCgpa        Float?
+  isActive       Boolean @default(true)
+
+  industry     IndustryProfile @relation(fields: [industryId], references: [id], onDelete: Cascade)
+  skills       JobSkillRequirement[]
+  applications Application[]
+
+  createdAt DateTime @default(now())
+}
+
+model JobSkillRequirement {
+  id     String @id @default(cuid())
+  jobId  String
+  skillId String
+  weight Int    @default(1)
+  job    JobPosting @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  skill  Skill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, skillId])
+}
+
+model Application {
+  id           String @id @default(cuid())
+  studentId    String
+  internshipId String?
+  jobId        String?
+  status       ApplicationStatus @default(APPLIED)
+  matchScore   Float?
+  coverNote    String?
+  resumeUrl    String?
+
+  student    StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  internship Internship?    @relation(fields: [internshipId], references: [id])
+  job        JobPosting?    @relation(fields: [jobId], references: [id])
+  timeline   ApplicationEvent[]
+  feedback   MentorFeedback[]
+  progressLogs ProgressLog[]
+
+  appliedAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([studentId, internshipId])
+  @@unique([studentId, jobId])
+}
+
+model ApplicationEvent {
+  id            String @id @default(cuid())
+  applicationId String
+  status        ApplicationStatus
+  note          String?
+  createdAt     DateTime @default(now())
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+}
+
+model MentorFeedback {
+  id            String @id @default(cuid())
+  applicationId String
+  mentorName    String
+  rating        Int
+  comment       String
+  weekNumber    Int
+  createdAt     DateTime @default(now())
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+}
+
+model ProgressLog {
+  id            String @id @default(cuid())
+  applicationId String
+  studentId     String
+  weekNumber    Int
+  tasks         String
+  learnings     String
+  hours         Int
+  createdAt     DateTime @default(now())
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  student       StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model LearningProgram {
+  id          String @id @default(cuid())
+  industryId  String
+  title       String
+  description String
+  type        ProgramType
+  duration    String
+  mode        String
+  fee         Int    @default(0)
+  isActive    Boolean @default(true)
+
+  industry    IndustryProfile @relation(fields: [industryId], references: [id], onDelete: Cascade)
+  skills      ProgramSkill[]
+  enrollments ProgramEnrollment[]
+  modules     ProgramModule[]
+
+  createdAt DateTime @default(now())
+}
+
+model ProgramSkill {
+  id        String @id @default(cuid())
+  programId String
+  skillId   String
+  program   LearningProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  skill     Skill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([programId, skillId])
+}
+
+model ProgramModule {
+  id        String @id @default(cuid())
+  programId String
+  title     String
+  order     Int
+  program   LearningProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+}
+
+model ProgramEnrollment {
+  id         String @id @default(cuid())
+  programId  String
+  studentId  String
+  progress   Int    @default(0)
+  completed  Boolean @default(false)
+  enrolledAt DateTime @default(now())
+  completedAt DateTime?
+
+  program     LearningProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  student     StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  certificate Certificate?
+
+  @@unique([programId, studentId])
+}
+
+model FacultyOpportunity {
+  id          String @id @default(cuid())
+  title       String
+  description String
+  type        OpportunityType
+  organization String
+  location    String
+  deadline    DateTime
+  stipend     Int?
+  isActive    Boolean @default(true)
+
+  applications FacultyApplication[]
+  createdAt DateTime @default(now())
+}
+
+model FacultyApplication {
+  id           String @id @default(cuid())
+  facultyId    String
+  opportunityId String
+  status       ApplicationStatus @default(APPLIED)
+  coverNote    String?
+
+  faculty     FacultyProfile @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  opportunity FacultyOpportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  appliedAt   DateTime @default(now())
+
+  @@unique([facultyId, opportunityId])
+}
+
+model MentorshipRequest {
+  id        String @id @default(cuid())
+  menteeId  String
+  mentorId  String?
+  topic     String
+  message   String
+  status    String @default("PENDING")
+  scheduledAt DateTime?
+  mentee    StudentProfile @relation("MenteeRequests", fields: [menteeId], references: [id], onDelete: Cascade)
+  mentor    FacultyProfile? @relation("MentorSessions", fields: [mentorId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model Workshop {
+  id          String @id @default(cuid())
+  industryId  String?
+  title       String
+  description String
+  speaker     String
+  date        DateTime
+  mode        String
+  capacity    Int
+  industry    IndustryProfile? @relation(fields: [industryId], references: [id])
+  registrations WorkshopRegistration[]
+}
+
+model WorkshopRegistration {
+  id         String @id @default(cuid())
+  workshopId String
+  studentId  String?
+  facultyId  String?
+  workshop   Workshop @relation(fields: [workshopId], references: [id], onDelete: Cascade)
+  student    StudentProfile? @relation(fields: [studentId], references: [id])
+  faculty    FacultyProfile? @relation(fields: [facultyId], references: [id])
+  registeredAt DateTime @default(now())
+
+  @@unique([workshopId, studentId])
+  @@unique([workshopId, facultyId])
+}
+
+model InnovationChallenge {
+  id          String @id @default(cuid())
+  industryId  String
+  title       String
+  description String
+  prize       String
+  deadline    DateTime
+  industry    IndustryProfile @relation(fields: [industryId], references: [id], onDelete: Cascade)
+  submissions ChallengeSubmission[]
+}
+
+model ChallengeSubmission {
+  id          String @id @default(cuid())
+  challengeId String
+  studentId   String
+  title       String
+  description String
+  score       Int    @default(0)
+  challenge   InnovationChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  student     StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  submittedAt DateTime @default(now())
+}
+
+model LiveProject {
+  id          String @id @default(cuid())
+  industryId  String
+  title       String
+  description String
+  teamSize    Int
+  deadline    DateTime
+  industry    IndustryProfile @relation(fields: [industryId], references: [id], onDelete: Cascade)
+  members     ProjectMember[]
+}
+
+model ProjectMember {
+  id        String @id @default(cuid())
+  projectId String
+  studentId String
+  role      String @default("Member")
+  project   LiveProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, studentId])
+}
+
+model JobRole {
+  id          String @id @default(cuid())
+  title       String @unique
+  industry    String
+  description String
+  demandTrend Int
+  avgPackage  Int
+  roadmap     Json
+  skills      Json
+}
+
+model Notification {
+  id        String @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  link      String?
+  readAt    DateTime?
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model Message {
+  id         String @id @default(cuid())
+  senderId   String
+  receiverId String
+  content    String
+  threadId   String
+  readAt     DateTime?
+  sender     User   @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver   User   @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+}
+
+model Document {
+  id        String @id @default(cuid())
+  userId    String
+  name      String
+  type      String
+  path      String
+  size      Int
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
