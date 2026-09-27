@@ -3,11 +3,17 @@ import { Button } from '@/components/ui/Button';
 import { BarChart } from '@/components/charts/BarChart';
 import { FunnelChart } from '@/components/charts/FunnelChart';
 import { MOCK_ADMIN_METRICS } from '@/lib/mockData';
+import { downloadAdminAnalyticsCSV } from '@/lib/pdfExport';
 import { BarChart3, Download, TrendingUp, ShieldCheck, Award } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function AdminAnalytics() {
   const metrics = MOCK_ADMIN_METRICS;
+
+  const handleExportDataset = () => {
+    downloadAdminAnalyticsCSV();
+    toast.success('Official institutional accreditation dataset exported as CSV!');
+  };
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
@@ -25,8 +31,8 @@ export function AdminAnalytics() {
           </p>
         </div>
 
-        <Button onClick={() => toast.success('Analytics CSV dataset exported.')} className="min-h-[44px]">
-          <Download className="h-4 w-4 mr-1" /> Export Audit Dataset
+        <Button onClick={handleExportDataset} className="min-h-[44px]">
+          <Download className="h-4 w-4 mr-1" /> Export Audit Dataset (CSV)
         </Button>
       </div>
 

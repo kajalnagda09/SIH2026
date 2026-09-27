@@ -46,6 +46,9 @@ export function LandingPage() {
                 <Button variant="ghost" onClick={() => navigate('/login')} className="min-h-[44px]">
                   Sign In
                 </Button>
+                <Button variant="secondary" onClick={() => navigate('/register')} className="min-h-[44px]">
+                  Create Account
+                </Button>
                 <Button onClick={() => handleDemoLaunch('STUDENT')} className="min-h-[44px]">
                   Explore Scholar Portal <ChevronRight className="h-4 w-4 ml-1" />
                 </Button>

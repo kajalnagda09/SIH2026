@@ -6,9 +6,10 @@ import { BarChart } from '@/components/charts/BarChart';
 import { useAuth } from '@/context/AuthContext';
 import { MOCK_ADMIN_METRICS, type AdminProfile } from '@/lib/mockData';
 import { downloadNIRFReportPDF } from '@/lib/pdfExport';
+import { DocumentPreviewModal } from '@/components/ui/DocumentPreviewModal';
 import {
   ShieldCheck, Users, GraduationCap, Building2, BarChart3,
-  Award, CheckCircle2, TrendingUp, Download, Sparkles
+  Award, CheckCircle2, TrendingUp, Download, Sparkles, Eye
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -16,6 +17,7 @@ export function AdminDashboard() {
   const { user } = useAuth();
   const profile = (user?.profile || {}) as Partial<AdminProfile>;
   const metrics = MOCK_ADMIN_METRICS;
+  const [showAuditModal, setShowAuditModal] = useState(false);
 
   const [verifications, setVerifications] = useState([
     { id: 'v1', name: 'Zydus Lifesciences', type: 'Industry Partner Onboarding', date: '21 Sep 2026', status: 'PENDING' },
@@ -48,12 +50,9 @@ export function AdminDashboard() {
         <div className="flex items-center gap-3">
           <Button
             variant="secondary"
-            onClick={() => {
-              downloadNIRFReportPDF();
-              toast.success('NIRF & NAAC Accreditation Report PDF downloaded!');
-            }}
+            onClick={() => setShowAuditModal(true)}
           >
-            <Download className="h-4 w-4 mr-1" /> Export NIRF Audit Report (PDF)
+            <Eye className="h-4 w-4 mr-1" /> Preview &amp; Export NIRF Audit (PDF)
           </Button>
           <Button onClick={() => toast.info('Accreditation portal synced with Ministry of Ayush.')}>
             Sync National Ledger
@@ -183,6 +182,16 @@ export function AdminDashboard() {
           </Card>
         </div>
       </div>
+
+      {/* Animated Pop Up Document Preview Modal on top of screen */}
+      <DocumentPreviewModal
+        isOpen={showAuditModal}
+        onClose={() => setShowAuditModal(false)}
+        docType="NAAC_REPORT"
+        title="Institutional NIRF & NAAC Criterion Audit Report"
+        data={{ fullName: profile.fullName || 'Dr. Karthik Reddy', department: 'Academic Directorate', college: 'All India Institute of Ayurveda' }}
+        onDownloadPdf={downloadNIRFReportPDF}
+      />
     </div>
   );
 }

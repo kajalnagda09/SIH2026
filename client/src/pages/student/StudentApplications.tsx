@@ -4,15 +4,17 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { MOCK_APPLICATIONS, type Application } from '@/lib/mockData';
 import { downloadOfferLetterPDF } from '@/lib/pdfExport';
+import { DocumentPreviewModal } from '@/components/ui/DocumentPreviewModal';
 import {
   FileCheck, Calendar, Clock, CheckCircle2, Circle, AlertCircle,
-  Building2, Sparkles, Video, ExternalLink, Download
+  Building2, Sparkles, Video, ExternalLink, Download, Eye
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { toast } from 'sonner';
 
 export function StudentApplications() {
   const [applications, setApplications] = useState<Application[]>(MOCK_APPLICATIONS);
+  const [selectedAppForPreview, setSelectedAppForPreview] = useState<Application | null>(null);
 
   const handleAcceptOffer = (id: string, company: string) => {
     setApplications((prev) =>
@@ -149,26 +151,47 @@ export function StudentApplications() {
                     size="sm"
                     variant="secondary"
                     className="min-h-[44px]"
-                    onClick={() => {
-                      downloadOfferLetterPDF(app);
-                      toast.success(`Formal appointment letter for ${app.company} downloaded as PDF!`);
-                    }}
+                    onClick={() => setSelectedAppForPreview(app)}
                   >
-                    <Download className="h-3.5 w-3.5 mr-1" /> Download Letter (PDF)
+                    <Eye className="h-3.5 w-3.5 mr-1" /> View &amp; Download Offer
                   </Button>
                 </div>
               </div>
             )}
 
             {app.status === 'JOINED' && (
-              <div className="pt-2 flex items-center gap-2 text-xs font-semibold text-emerald-600">
-                <CheckCircle2 className="h-4 w-4" />
-                <span>You are formally enrolled in this internship. Mentor: Dr. Priyanshi Mehta.</span>
+              <div className="pt-2 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600">
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>You are formally enrolled in this internship. Mentor: Dr. Priyanshi Mehta.</span>
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-xs text-primary"
+                  onClick={() => setSelectedAppForPreview(app)}
+                >
+                  <FileCheck className="h-3.5 w-3.5 mr-1" /> View Letter
+                </Button>
               </div>
             )}
           </Card>
         ))}
       </div>
+
+      {/* Animated Pop Up Document Preview Modal on top of screen */}
+      <DocumentPreviewModal
+        isOpen={!!selectedAppForPreview}
+        onClose={() => setSelectedAppForPreview(null)}
+        docType="OFFER_LETTER"
+        title={selectedAppForPreview ? `Formal Appointment Offer - ${selectedAppForPreview.company}` : 'Offer Letter'}
+        data={selectedAppForPreview}
+        onDownloadPdf={() => {
+          if (selectedAppForPreview) {
+            downloadOfferLetterPDF(selectedAppForPreview);
+          }
+        }}
+      />
     </div>
   );
 }

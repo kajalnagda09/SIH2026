@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Card, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Handshake, Award, FileText, CheckCircle2 } from 'lucide-react';
+import { downloadMoUDeedPDF } from '@/lib/pdfExport';
+import { DocumentPreviewModal } from '@/components/ui/DocumentPreviewModal';
+import { Handshake, Award, FileText, CheckCircle2, Eye, Download } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function IndustryPrograms() {
@@ -11,6 +13,8 @@ export function IndustryPrograms() {
       title: 'Joint Centre for Herbal Formulation Standardization',
       status: 'ACTIVE_RATIFIED',
       tenure: '2024 - 2029 (5 Years)',
+      company: 'Dabur India Ltd',
+      roleTitle: 'Academic-Industry MoU Agreement',
       scope: 'Laboratory infrastructure funding, 15 annual student fellowships, co-patenting of HPTLC marker methods.',
     },
     {
@@ -18,9 +22,13 @@ export function IndustryPrograms() {
       title: 'National Ayush Youth Skill Enhancement Initiative (CSR)',
       status: 'ACTIVE_RATIFIED',
       tenure: '2025 - 2027 (2 Years)',
+      company: 'Himalaya Wellness Corp',
+      roleTitle: 'Corporate CSR Fellowship MoU',
       scope: 'Sponsoring 100 student certifications in Good Clinical Practice and regulatory pharmacovigilance.',
     },
   ]);
+
+  const [previewMoU, setPreviewMoU] = useState<any | null>(null);
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -52,15 +60,40 @@ export function IndustryPrograms() {
 
             <p className="text-xs text-muted-foreground leading-relaxed">{m.scope}</p>
 
-            <div className="pt-2 flex items-center justify-between text-xs font-mono text-muted-foreground">
+            <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono text-muted-foreground">
               <span>Tenure: {m.tenure}</span>
-              <Button size="sm" variant="secondary" onClick={() => toast.info('Full MoU deed downloaded.')}>
-                Download Ratified MoU Deed
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="secondary" onClick={() => setPreviewMoU(m)}>
+                  <Eye className="h-3.5 w-3.5 mr-1" /> Preview MoU Deed
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    downloadMoUDeedPDF(m);
+                    toast.success(`Ratified MoU deed for ${m.code} downloaded as PDF!`);
+                  }}
+                >
+                  <Download className="h-3.5 w-3.5 mr-1" /> Export PDF
+                </Button>
+              </div>
             </div>
           </Card>
         ))}
       </div>
+
+      {/* Animated Pop Up Document Preview Modal on top of screen */}
+      <DocumentPreviewModal
+        isOpen={!!previewMoU}
+        onClose={() => setPreviewMoU(null)}
+        docType="OFFER_LETTER"
+        title={previewMoU ? `Ratified Corporate MoU - ${previewMoU.code}` : 'MoU Agreement'}
+        data={previewMoU}
+        onDownloadPdf={() => {
+          if (previewMoU) {
+            downloadMoUDeedPDF(previewMoU);
+          }
+        }}
+      />
     </div>
   );
 }

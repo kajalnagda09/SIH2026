@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { Card, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/context/AuthContext';
 import { type StudentProfile, MOCK_CERTIFICATES, type Certificate } from '@/lib/mockData';
 import { downloadCertificatePDF, downloadStudentDossierPDF } from '@/lib/pdfExport';
+import { DocumentPreviewModal, type PreviewDocType } from '@/components/ui/DocumentPreviewModal';
 import {
   Award, ShieldCheck, Share2, Download, ExternalLink,
   CheckCircle2, QrCode
@@ -13,10 +15,24 @@ export function StudentPortfolio() {
   const { user } = useAuth();
   const profile = (user?.profile || {}) as Partial<StudentProfile>;
   const portfolio = profile.portfolio || {
-    publicSlug: 'ananya-iyer-aiia',
+    publicSlug: (profile.fullName || user?.email?.split('@')[0] || 'scholar').toLowerCase().replace(/\s+/g, '-'),
     projects: [],
     achievements: [],
   };
+
+  const [previewModal, setPreviewModal] = useState<{
+    isOpen: boolean;
+    docType: PreviewDocType;
+    title: string;
+    data: any;
+    downloadFn: () => void;
+  }>({
+    isOpen: false,
+    docType: 'DOSSIER',
+    title: '',
+    data: null,
+    downloadFn: () => {},
+  });
 
   const handleShare = () => {
     navigator.clipboard?.writeText(`https://setu.edu.in/portfolio/${portfolio.publicSlug}`);
@@ -24,13 +40,36 @@ export function StudentPortfolio() {
   };
 
   const handleDownloadDossier = () => {
-    downloadStudentDossierPDF(profile);
-    toast.success('Official Student Dossier PDF generated and downloaded!');
+    setPreviewModal({
+      isOpen: true,
+      docType: 'DOSSIER',
+      title: 'Official Scholar Clinical Dossier',
+      data: profile,
+      downloadFn: () => {
+        downloadStudentDossierPDF(profile);
+        toast.success('Official Student Dossier PDF generated and downloaded!');
+      },
+    });
   };
 
   const handleDownloadCert = (cert: Certificate) => {
-    downloadCertificatePDF(cert);
-    toast.success(`Official Certificate PDF downloaded for ${cert.credentialId}!`);
+    setPreviewModal({
+      isOpen: true,
+      docType: 'CERTIFICATE',
+      title: 'Verified Competency Credential',
+      data: {
+        ...cert,
+        studentName: profile.fullName || 'Scholar Student',
+        rollNumber: profile.rollNumber || 'AIIA2026108',
+      },
+      downloadFn: () => {
+        downloadCertificatePDF({
+          ...cert,
+          studentName: profile.fullName || 'Scholar Student',
+        });
+        toast.success(`Official Certificate PDF downloaded for ${cert.credentialId}!`);
+      },
+    });
   };
 
   return (
@@ -174,6 +213,16 @@ export function StudentPortfolio() {
           </div>
         </div>
       </Card>
+
+      {/* Animated Screen Popup Modal */}
+      <DocumentPreviewModal
+        isOpen={previewModal.isOpen}
+        onClose={() => setPreviewModal((p) => ({ ...p, isOpen: false }))}
+        docType={previewModal.docType}
+        title={previewModal.title}
+        data={previewModal.data}
+        onDownloadPdf={previewModal.downloadFn}
+      />
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { Toaster } from 'sonner';
 // Public Pages
 import { LandingPage } from '@/pages/LandingPage';
 import { LoginPage } from '@/pages/LoginPage';
+import { RegisterPage } from '@/pages/RegisterPage';
 import { NotificationsPage } from '@/pages/NotificationsPage';
 
 // Student Pages
@@ -51,6 +52,7 @@ export default function App() {
           {/* Public Routes */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
 
           {/* Student Portal */}
           <Route

@@ -2,16 +2,22 @@ import { useState } from 'react';
 import { Card, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { MOCK_ASSESSMENTS, type Assessment } from '@/lib/mockData';
-import { BookOpen, Award, CheckCircle2, Clock, Play, RotateCcw, Sparkles } from 'lucide-react';
+import { MOCK_ASSESSMENTS, type Assessment, type Certificate } from '@/lib/mockData';
+import { realtimeDb } from '@/lib/realtimeDb';
+import { downloadCertificatePDF } from '@/lib/pdfExport';
+import { DocumentPreviewModal } from '@/components/ui/DocumentPreviewModal';
+import { useAuth } from '@/context/AuthContext';
+import { BookOpen, Award, CheckCircle2, Clock, Play, RotateCcw, Sparkles, Download, Eye } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { toast } from 'sonner';
 
 export function StudentAssessments() {
+  const { user } = useAuth();
   const [assessments, setAssessments] = useState<Assessment[]>(MOCK_ASSESSMENTS);
   const [activeTest, setActiveTest] = useState<Assessment | null>(null);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, number>>({});
   const [testResult, setTestResult] = useState<{ score: number; passed: boolean } | null>(null);
+  const [selectedCertForPreview, setSelectedCertForPreview] = useState<Certificate | null>(null);
 
   const handleStart = (test: Assessment) => {
     setActiveTest(test);
@@ -44,11 +50,28 @@ export function StudentAssessments() {
     );
 
     if (passed) {
+      realtimeDb.updateTaskStatus('task_01', true, user?.id);
       confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
-      toast.success(`Passed with ${percentage}%! Verified credential badge issued.`);
+      toast.success(`Passed with ${percentage}%! Task #1 marked complete & credential issued.`);
     } else {
       toast.error(`Score: ${percentage}%. You need ${activeTest.passingScore}% to pass.`);
     }
+  };
+
+  const createCertFromAssessment = (assessment: Assessment): Certificate => {
+    const studentName = (user?.profile as any)?.fullName || user?.email?.split('@')[0] || 'Aayush Sharma';
+    const rollNumber = (user?.profile as any)?.rollNumber || 'AIIA2026108';
+    return {
+      id: `cert_${assessment.id}`,
+      studentName,
+      rollNumber,
+      courseTitle: assessment.title,
+      issuedBy: 'All India Institute of Ayurveda & Ministry of Ayush',
+      issueDate: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+      credentialId: `SETU-AIIA-2026-${assessment.id.toUpperCase()}`,
+      verificationUrl: `https://setu.ayush.gov.in/verify/SETU-AIIA-2026-${assessment.id.toUpperCase()}`,
+      skillsVerified: [assessment.category, 'Good Clinical Practice', 'Ethical Assays', 'National Standards'],
+    };
   };
 
   return (
@@ -89,7 +112,7 @@ export function StudentAssessments() {
 
           {/* Result view if submitted */}
           {testResult ? (
-            <div className={`p-6 rounded-[var(--radius-lg)] text-center space-y-4 border ${
+            <div className={`p-6 sm:p-8 rounded-[var(--radius-lg)] text-center space-y-4 border ${
               testResult.passed ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-900 dark:text-emerald-200' : 'bg-red-500/10 border-red-500/30 text-red-900 dark:text-red-200'
             }`}>
               <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-card shadow-sm mx-auto">
@@ -101,8 +124,21 @@ export function StudentAssessments() {
               <p className="text-sm">
                 Your Score: <strong className="font-mono text-lg">{testResult.score}%</strong> (Passing Benchmark: {activeTest.passingScore}%)
               </p>
-              <div className="pt-2">
-                <Button onClick={() => setActiveTest(null)} className="min-h-[44px]">
+              {testResult.passed && (
+                <div className="p-3 bg-emerald-500/20 border border-emerald-500/40 rounded-lg max-w-md mx-auto text-xs text-emerald-800 dark:text-emerald-300 font-medium">
+                  ✓ Task #1 in your Action Checklist has been automatically verified &amp; marked complete!
+                </div>
+              )}
+              <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+                {testResult.passed && (
+                  <Button
+                    onClick={() => setSelectedCertForPreview(createCertFromAssessment(activeTest))}
+                    className="min-h-[44px] bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-semibold shadow-md"
+                  >
+                    <Award className="h-4 w-4 mr-1.5" /> View &amp; Download Verified Certificate
+                  </Button>
+                )}
+                <Button variant="secondary" onClick={() => setActiveTest(null)} className="min-h-[44px]">
                   Return to Assessment Roster
                 </Button>
               </div>
@@ -188,16 +224,26 @@ export function StudentAssessments() {
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-border">
+              <div className="pt-4 border-t border-border space-y-2">
                 {item.status === 'PASSED' ? (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="w-full text-xs font-semibold"
-                    onClick={() => handleStart(item)}
-                  >
-                    <RotateCcw className="h-3.5 w-3.5 mr-1" /> Retake Test
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      className="flex-1 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white min-h-[40px]"
+                      onClick={() => setSelectedCertForPreview(createCertFromAssessment(item))}
+                    >
+                      <Award className="h-3.5 w-3.5 mr-1" /> View Certificate
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="text-xs font-semibold min-h-[40px]"
+                      onClick={() => handleStart(item)}
+                      title="Retake test"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 ) : (
                   <Button
                     size="sm"
@@ -212,6 +258,20 @@ export function StudentAssessments() {
           ))}
         </div>
       )}
+
+      {/* Animated Pop Up Document Preview Modal on top of screen */}
+      <DocumentPreviewModal
+        isOpen={!!selectedCertForPreview}
+        onClose={() => setSelectedCertForPreview(null)}
+        docType="CERTIFICATE"
+        title={selectedCertForPreview?.courseTitle || 'Certificate of Verified Competency'}
+        data={selectedCertForPreview}
+        onDownloadPdf={() => {
+          if (selectedCertForPreview) {
+            downloadCertificatePDF(selectedCertForPreview);
+          }
+        }}
+      />
     </div>
   );
 }

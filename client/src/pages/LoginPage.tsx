@@ -32,8 +32,8 @@ export function LoginPage() {
       const u = await login(email, password);
       toast.success('Successfully authenticated');
       navigate(dashboardPath(u.role));
-    } catch {
-      toast.error('Authentication failed');
+    } catch (err: any) {
+      toast.error(err?.message || 'Authentication failed. Please verify credentials.');
     } finally {
       setLoading(false);
     }
@@ -151,18 +151,16 @@ export function LoginPage() {
               </p>
             </div>
 
-            <Button type="submit" loading={loading} className="w-full mt-2">
+            <Button type="submit" loading={loading} className="w-full mt-2 min-h-[46px] text-sm font-semibold">
               Sign In to Portal <ArrowRight className="h-4 w-4 ml-1" />
             </Button>
           </form>
 
-          <div className="mt-6 pt-6 border-t border-border text-center">
-            <p className="text-xs text-muted-foreground">
-              Don't have an institutional account?{' '}
-              <Link to="/" className="text-primary font-medium hover:underline">
-                Explore platform overview
-              </Link>
-            </p>
+          <div className="mt-6 pt-6 border-t border-border flex flex-col sm:flex-row items-center justify-between text-xs text-muted-foreground gap-3">
+            <span>New scholar, faculty, or partner?</span>
+            <Link to="/register" className="text-primary font-bold hover:underline flex items-center gap-1">
+              Create an Account <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
           </div>
         </Card>
       </div>

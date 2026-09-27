@@ -4,15 +4,128 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { MOCK_CODING_PROBLEMS, type CodingProblem } from '@/lib/mockData';
 import { executeCodeTests, type TestRunResult } from '@/lib/testRunner';
+import { useAuth } from '@/context/AuthContext';
+import { realtimeDb } from '@/lib/realtimeDb';
 import {
   Code2, Play, CheckCircle2, XCircle, RotateCcw, Sparkles, Terminal,
-  Flame, AlertTriangle, Check, X
+  Flame, AlertTriangle, Check, X, Bug, Lightbulb
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { toast } from 'sonner';
 
+const SAMPLE_SOLUTIONS: Record<string, string> = {
+  'herbal-inventory-sum': `function solve(weights, target) {
+  // Map values to index
+  const seen = new Map();
+  for (let i = 0; i < weights.length; i++) {
+    const complement = target - weights[i];
+    if (seen.has(complement)) {
+      return [seen.get(complement), i];
+    }
+    seen.set(weights[i], i);
+  }
+  return [];
+}`,
+  'valid-prescription-brackets': `function solve(s) {
+  const stack = [];
+  const map = { ')': '(', ']': '[', '}': '{' };
+  
+  for (const char of s.trim()) {
+    if (['(', '[', '{'].includes(char)) {
+      stack.push(char);
+    } else if ([')', ']', '}'].includes(char)) {
+      if (stack.pop() !== map[char]) return false;
+    }
+  }
+  return stack.length === 0;
+}`,
+  'patient-queue-priority': `function solve(scores, k) {
+  scores.sort((a, b) => b - a);
+  return scores[k - 1];
+}`,
+  'ayurvedic-palindrome': `function solve(s) {
+  const clean = s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return clean === clean.split('').reverse().join('');
+}`,
+  'binary-search-dosage': `function solve(concentrations, target) {
+  let low = 0;
+  let high = concentrations.length - 1;
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    if (concentrations[mid] === target) return mid;
+    if (concentrations[mid] < target) low = mid + 1;
+    else high = mid - 1;
+  }
+  return -1;
+}`,
+};
+
+const STARTER_TEMPLATES: Record<string, string> = {
+  'herbal-inventory-sum': `/**
+ * Ayurvedic Formulation Inventory Sum
+ * @param {number[]} weights - Herb batch weights in kg
+ * @param {number} target - Required formulation target weight
+ * @return {number[]} - Indices of the two batches
+ */
+function solve(weights, target) {
+  // Write your solution here:
+  // If your code has syntax/logical errors, test cases will FAIL.
+  // When your solution is correct, all test cases will PASS!
+  
+}
+`,
+  'valid-prescription-brackets': `/**
+ * Valid Prescription Brackets
+ * @param {string} s - Nested prescription tier string
+ * @return {boolean} - True if brackets are balanced, false otherwise
+ */
+function solve(s) {
+  // Define bracket validator
+  
+}
+`,
+  'patient-queue-priority': `/**
+ * Patient Queue Priority Triage
+ * @param {number[]} scores - Emergency triage scores
+ * @param {number} k - Rank priority to locate
+ * @return {number} - The k-th highest triage score
+ */
+function solve(scores, k) {
+  // Return the k-th highest urgency score
+  
+}
+`,
+  'ayurvedic-palindrome': `/**
+ * Ayurvedic Compound Palindrome Validator
+ * @param {string} s - Botanical formulation name
+ * @return {boolean} - True if symmetrical
+ */
+function solve(s) {
+  // Validate alphanumeric case-insensitive symmetry
+  
+}
+`,
+  'binary-search-dosage': `/**
+ * Binary Search Drug Concentration
+ * @param {number[]} concentrations - Sorted extract concentrations
+ * @param {number} target - Target dosage to search
+ * @return {number} - Index or -1 if missing
+ */
+function solve(concentrations, target) {
+  // Implement logarithmic binary search
+  
+}
+`,
+};
+
 export function StudentCoding() {
-  const [problems, setProblems] = useState<CodingProblem[]>(MOCK_CODING_PROBLEMS);
+  const { user } = useAuth();
+  const [problems, setProblems] = useState<CodingProblem[]>(() =>
+    MOCK_CODING_PROBLEMS.map((p) => ({
+      ...p,
+      starterCode: STARTER_TEMPLATES[p.slug] || p.starterCode,
+    }))
+  );
   const [selectedId, setSelectedId] = useState<string>(problems[0].id);
   const [code, setCode] = useState<string>(problems[0].starterCode);
   const [testResult, setTestResult] = useState<TestRunResult | null>(null);
@@ -22,7 +135,7 @@ export function StudentCoding() {
 
   const handleSelectProblem = (p: CodingProblem) => {
     setSelectedId(p.id);
-    setCode(p.starterCode);
+    setCode(STARTER_TEMPLATES[p.slug] || p.starterCode);
     setTestResult(null);
   };
 
@@ -34,11 +147,11 @@ export function StudentCoding() {
       setRunning(false);
 
       if (res.passed) {
-        toast.success(`Passed ${res.passedTests}/${res.totalTests} tests in ${res.executionTimeMs}ms!`);
+        toast.success(`Passed ${res.passedTests}/${res.totalTests} tests in ${res.executionTimeMs}ms! 🚀`);
       } else {
-        toast.error(`Tests failed: ${res.passedTests}/${res.totalTests} passed`);
+        toast.error(`Tests failed: ${res.passedTests}/${res.totalTests} passed.`);
       }
-    }, 300);
+    }, 250);
   };
 
   const handleSubmit = () => {
@@ -52,12 +165,31 @@ export function StudentCoding() {
         setProblems((prev) =>
           prev.map((p) => (p.id === currentProblem.id ? { ...p, solved: true } : p))
         );
+        // Automatically complete task 2 in the realtime database!
+        if (user?.id) {
+          realtimeDb.markTaskComplete(user.id, 'task_02');
+        }
         confetti({ particleCount: 100, spread: 80, origin: { y: 0.6 } });
         toast.success('Accepted! All test cases validated and solution verified on national ledger.');
       } else {
-        toast.error('Submission rejected: Solution failed one or more test cases.');
+        toast.error('Submission rejected: Solution failed one or more test cases. Review error diff below.');
       }
-    }, 450);
+    }, 350);
+  };
+
+  const handleLoadSolution = () => {
+    const sol = SAMPLE_SOLUTIONS[currentProblem.slug];
+    if (sol) {
+      setCode(sol);
+      setTestResult(null);
+      toast.info('Loaded optimal reference solution. Click "Run Tests" to execute against live vectors.');
+    }
+  };
+
+  const handleInjectError = () => {
+    setCode(`function solve(...) {\n  // Intentionally invalid return value to test error handling\n  return "INVALID_OUTPUT_VECTOR";\n}`);
+    setTestResult(null);
+    toast.warning('Injected error case. Click "Run Tests" to verify that test runner fails gracefully!');
   };
 
   return (
@@ -144,7 +276,7 @@ export function StudentCoding() {
 
             <div className="space-y-3 pt-2">
               <h4 className="font-mono text-xs font-semibold text-foreground uppercase">
-                Example Input / Output:
+                Example Input / Output Vectors:
               </h4>
               {currentProblem.examples.map((ex, idx) => (
                 <div key={idx} className="p-3 rounded-[var(--radius-sm)] bg-muted/60 border border-border/70 font-mono text-[11px] space-y-1">
@@ -165,22 +297,42 @@ export function StudentCoding() {
         {/* Code Editor & Test Runner (7 cols) */}
         <div className="lg:col-span-7 space-y-4">
           <Card className="p-4 bg-slate-950 text-slate-100 border-slate-800 space-y-3 shadow-xl">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <Terminal className="h-4 w-4 text-emerald-400" />
-                <span className="font-mono text-xs text-slate-300">solution.js (JavaScript Node 20)</span>
+                <span className="font-mono text-xs text-slate-300">solution.js (JavaScript Node 20 Sandbox)</span>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setCode(currentProblem.starterCode);
-                  setTestResult(null);
-                }}
-                className="text-xs text-slate-400 hover:text-white hover:bg-slate-800 h-8"
-              >
-                <RotateCcw className="h-3 w-3 mr-1" /> Reset Code
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleLoadSolution}
+                  className="text-xs text-emerald-400 hover:text-emerald-300 hover:bg-slate-800 h-8"
+                  title="Load reference working solution"
+                >
+                  <Lightbulb className="h-3 w-3 mr-1" /> Load Solution
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleInjectError}
+                  className="text-xs text-amber-400 hover:text-amber-300 hover:bg-slate-800 h-8"
+                  title="Test failure case"
+                >
+                  <Bug className="h-3 w-3 mr-1" /> Test Error
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setCode(STARTER_TEMPLATES[currentProblem.slug] || currentProblem.starterCode);
+                    setTestResult(null);
+                  }}
+                  className="text-xs text-slate-400 hover:text-white hover:bg-slate-800 h-8"
+                >
+                  <RotateCcw className="h-3 w-3 mr-1" /> Reset
+                </Button>
+              </div>
             </div>
 
             {/* Editor Area */}
@@ -197,7 +349,7 @@ export function StudentCoding() {
             {/* Run / Submit buttons */}
             <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
               <span className="text-[11px] font-mono text-slate-400">
-                Live sandbox validator tests your code in real time.
+                Sandbox evaluates syntax, edge cases, and runtime performance.
               </span>
               <div className="flex items-center gap-2">
                 <Button

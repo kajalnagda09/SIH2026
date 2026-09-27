@@ -4,12 +4,14 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { MOCK_CERTIFICATES, type Certificate } from '@/lib/mockData';
 import { downloadCertificatePDF } from '@/lib/pdfExport';
-import { Trophy, Plus, Award, QrCode, CheckCircle2, Download } from 'lucide-react';
+import { DocumentPreviewModal } from '@/components/ui/DocumentPreviewModal';
+import { Trophy, Plus, Award, QrCode, CheckCircle2, Download, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function AdminCertificates() {
   const [certs, setCerts] = useState<Certificate[]>(MOCK_CERTIFICATES);
   const [showModal, setShowModal] = useState(false);
+  const [previewCert, setPreviewCert] = useState<Certificate | null>(null);
   const [studentName, setStudentName] = useState('');
   const [rollNumber, setRollNumber] = useState('');
   const [courseTitle, setCourseTitle] = useState('');
@@ -106,6 +108,12 @@ export function AdminCertificates() {
               <Button
                 size="sm"
                 variant="secondary"
+                onClick={() => setPreviewCert(c)}
+              >
+                <Eye className="h-3.5 w-3.5 mr-1" /> Preview Credential
+              </Button>
+              <Button
+                size="sm"
                 onClick={() => {
                   downloadCertificatePDF(c);
                   toast.success(`Official certificate PDF ${c.credentialId} generated!`);
@@ -113,13 +121,24 @@ export function AdminCertificates() {
               >
                 <Download className="h-3.5 w-3.5 mr-1" /> Export PDF
               </Button>
-              <Button size="sm" onClick={() => toast.info(`Cryptographic hash validated on AIIA portal.`)}>
-                Verify QR
-              </Button>
             </div>
           </Card>
         ))}
       </div>
+
+      {/* Animated Pop Up Document Preview Modal on top of screen */}
+      <DocumentPreviewModal
+        isOpen={!!previewCert}
+        onClose={() => setPreviewCert(null)}
+        docType="CERTIFICATE"
+        title={previewCert?.courseTitle || 'Certificate of Verified Competency'}
+        data={previewCert}
+        onDownloadPdf={() => {
+          if (previewCert) {
+            downloadCertificatePDF(previewCert);
+          }
+        }}
+      />
     </div>
   );
 }
