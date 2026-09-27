@@ -16,21 +16,21 @@ export function StudentCollaboration() {
   const { user } = useAuth();
   const profile = user?.profile || {};
   const studentId = user?.id || 'usr_student_01';
-  const studentName = profile.fullName || user?.email?.split('@')[0] || 'Scholar Student';
-  const studentRoll = profile.rollNumber || 'AIIA2026108';
-  const studentBranch = profile.branch || 'BAMS 3rd Year';
+  const studentName = (profile.fullName as string) || user?.email?.split('@')[0] || 'Scholar Student';
+  const studentRoll = (profile.rollNumber as string) || 'AIIA2026108';
+  const studentBranch = (profile.branch as string) || 'BAMS 3rd Year';
 
   const [topic, setTopic] = useState('');
   const [methodology, setMethodology] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [proposals, setProposals] = useState<ResearchProposal[]>(() =>
-    realtimeDb.getProposalsForStudent(studentName)
+    realtimeDb.getProposalsForStudent(studentName as string)
   );
 
   useEffect(() => {
-    setProposals(realtimeDb.getProposalsForStudent(studentName));
+    setProposals(realtimeDb.getProposalsForStudent(studentName as string));
     const unsubscribe = realtimeDb.subscribe(() => {
-      setProposals(realtimeDb.getProposalsForStudent(studentName));
+      setProposals(realtimeDb.getProposalsForStudent(studentName as string));
     });
     return () => unsubscribe();
   }, [studentName]);

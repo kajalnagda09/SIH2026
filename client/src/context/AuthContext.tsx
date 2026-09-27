@@ -1,62 +1,83 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { api, type User, type Role } from '@/lib/api';
+import { type Role } from '@/lib/api';
 import { DEMO_PROFILES } from '@/lib/mockData';
-import { realtimeDb, type RealtimeUser } from '@/lib/realtimeDb';
+import { supabaseDb, supabase } from '@/lib/supabase';
+
+export interface User {
+  id: string;
+  email: string;
+  role: Role;
+  isVerified: boolean;
+  profile: Record<string, unknown>;
+}
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password?: string) => Promise<User>;
   register: (email: string, password: string, role: Role, profile: any) => Promise<User>;
-  loginAsDemo: (role: Role) => void;
+  loginAsDemo: (role: Role) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const STORAGE_KEY = 'setu_auth_user_v3';
+const SESSION_KEY = 'setu_auth_session_v4';
+
+// Convert Supabase DbUser → App User
+function mapDbUser(db: { id: string; email: string; role: string; is_verified: boolean; profile: Record<string, unknown> }): User {
+  return {
+    id: db.id,
+    email: db.email,
+    role: db.role as Role,
+    isVerified: db.is_verified,
+    profile: db.profile || {},
+  };
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [seeded, setSeeded] = useState(false);
+
+  // Seed demo users once on first load
+  useEffect(() => {
+    if (!seeded) {
+      setSeeded(true);
+      supabaseDb.seedDemoUsers().catch(() => {
+        // Silently ignore if tables don't exist yet
+      });
+    }
+  }, [seeded]);
 
   const refresh = async () => {
-    // 1. Check local session
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
+    try {
+      const stored = sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(SESSION_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored) as User;
         if (parsed?.email) {
-          // Refresh profile if user exists in realtimeDb
+          // Re-validate from Supabase
           try {
-            const live = realtimeDb.authenticate(parsed.email);
+            const live = await supabaseDb.getUserByEmail(parsed.email);
             if (live) {
-              const mappedUser: User = {
-                id: live.id,
-                email: live.email,
-                role: live.role,
-                isVerified: live.isVerified,
-                profile: live.profile,
-              };
-              setUser(mappedUser);
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(mappedUser));
+              const freshUser = mapDbUser(live);
+              setUser(freshUser);
+              localStorage.setItem(SESSION_KEY, JSON.stringify(freshUser));
               setLoading(false);
               return;
             }
           } catch {
-            // User might be locally cached
+            // Use cached version
           }
           setUser(parsed);
           setLoading(false);
           return;
         }
-      } catch {
-        // Corrupt storage
       }
+    } catch {
+      // Corrupt storage
     }
-
-    // No active user session -> remain unauthenticated
     setUser(null);
     setLoading(false);
   };
@@ -64,79 +85,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     refresh();
 
-    // Subscribe to realtime database updates across tabs
-    const unsubscribe = realtimeDb.subscribe(() => {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (parsed?.email) {
-            const live = realtimeDb.authenticate(parsed.email);
-            if (live) {
-              setUser({
-                id: live.id,
-                email: live.email,
-                role: live.role,
-                isVerified: live.isVerified,
-                profile: live.profile,
-              });
-            }
-          }
-        } catch {
-          // Keep current
-        }
-      }
-    });
+    // Subscribe to real-time user table changes
+    const channel = supabase
+      .channel('auth_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'setu_users' }, () => {
+        refresh();
+      })
+      .subscribe();
 
-    return () => unsubscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const login = async (email: string, password?: string): Promise<User> => {
     const cleanEmail = email.trim().toLowerCase();
-    const isDemoAccount = ['student@setu.demo', 'faculty@setu.demo', 'industry@setu.demo', 'admin@setu.demo'].includes(cleanEmail);
+    const isDemoEmail = ['student@setu.demo', 'faculty@setu.demo', 'industry@setu.demo', 'admin@setu.demo'].includes(cleanEmail);
 
     try {
-      const live = realtimeDb.authenticate(cleanEmail, password);
-      const authenticatedUser: User = {
-        id: live.id,
-        email: live.email,
-        role: live.role,
-        isVerified: live.isVerified,
-        profile: live.profile,
-      };
-      setUser(authenticatedUser);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(authenticatedUser));
-      return authenticatedUser;
+      const dbUser = await supabaseDb.authenticate(cleanEmail, password);
+      const u = mapDbUser(dbUser);
+      setUser(u);
+      localStorage.setItem(SESSION_KEY, JSON.stringify(u));
+      return u;
     } catch (err: any) {
-      // If it's explicitly a demo email not yet in DB, provision demo profile
-      if (isDemoAccount) {
+      // Auto-provision demo accounts if not yet seeded
+      if (isDemoEmail) {
         let role: Role = 'STUDENT';
         if (cleanEmail.includes('faculty')) role = 'FACULTY';
         else if (cleanEmail.includes('industry')) role = 'INDUSTRY';
         else if (cleanEmail.includes('admin')) role = 'ADMIN';
 
         const demo = DEMO_PROFILES[role];
-        const newUser = realtimeDb.register({
-          email: cleanEmail,
-          password: password || 'demo123',
-          role,
-          profile: demo.profile,
-        });
-
-        const mappedUser: User = {
-          id: newUser.id,
-          email: newUser.email,
-          role: newUser.role,
-          isVerified: newUser.isVerified,
-          profile: newUser.profile,
-        };
-        setUser(mappedUser);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(mappedUser));
-        return mappedUser;
+        try {
+          const newUser = await supabaseDb.register({
+            email: cleanEmail,
+            password: password || 'demo123',
+            role,
+            profile: demo.profile as unknown as Record<string, unknown>,
+          });
+          const u = mapDbUser(newUser);
+          setUser(u);
+          localStorage.setItem(SESSION_KEY, JSON.stringify(u));
+          return u;
+        } catch {
+          // Already exists — try fetching directly
+          const existing = await supabaseDb.getUserByEmail(cleanEmail);
+          if (existing) {
+            const u = mapDbUser(existing);
+            setUser(u);
+            localStorage.setItem(SESSION_KEY, JSON.stringify(u));
+            return u;
+          }
+        }
       }
-
-      // Real user not found -> throw exact error so user knows to register
-      throw new Error(err?.message || `No account found with email "${cleanEmail}". Please register first or use 1-Click Demo Login.`);
+      throw new Error(err?.message || `No account found for "${cleanEmail}". Please register first.`);
     }
   };
 
@@ -146,63 +149,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     role: Role,
     profile: any
   ): Promise<User> => {
-    const newUser = realtimeDb.register({
-      email,
+    const dbUser = await supabaseDb.register({
+      email: email.trim().toLowerCase(),
       password,
       role,
       profile,
     });
 
-    const authenticatedUser: User = {
-      id: newUser.id,
-      email: newUser.email,
-      role: newUser.role,
-      isVerified: newUser.isVerified,
-      profile: newUser.profile,
-    };
-
-    setUser(authenticatedUser);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(authenticatedUser));
-    return authenticatedUser;
+    const u = mapDbUser(dbUser);
+    setUser(u);
+    localStorage.setItem(SESSION_KEY, JSON.stringify(u));
+    return u;
   };
 
-  const loginAsDemo = (role: Role) => {
+  const loginAsDemo = async (role: Role): Promise<void> => {
     const demoEmail =
-      role === 'STUDENT'
-        ? 'student@setu.demo'
-        : role === 'FACULTY'
-        ? 'faculty@setu.demo'
-        : role === 'INDUSTRY'
-        ? 'industry@setu.demo'
-        : 'admin@setu.demo';
+      role === 'STUDENT' ? 'student@setu.demo' :
+      role === 'FACULTY' ? 'faculty@setu.demo' :
+      role === 'INDUSTRY' ? 'industry@setu.demo' :
+      'admin@setu.demo';
 
     try {
-      const live = realtimeDb.authenticate(demoEmail);
-      const u: User = {
-        id: live.id,
-        email: live.email,
-        role: live.role,
-        isVerified: live.isVerified,
-        profile: live.profile,
-      };
+      const dbUser = await supabaseDb.authenticate(demoEmail);
+      const u = mapDbUser(dbUser);
       setUser(u);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
+      localStorage.setItem(SESSION_KEY, JSON.stringify(u));
     } catch {
-      const fallback = DEMO_PROFILES[role] as User;
-      setUser(fallback);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(fallback));
+      // Fallback: auto-register demo user
+      try {
+        const demo = DEMO_PROFILES[role];
+        const newUser = await supabaseDb.register({
+          email: demoEmail,
+          password: 'demo123',
+          role,
+          profile: demo.profile as unknown as Record<string, unknown>,
+        });
+        const u = mapDbUser(newUser);
+        setUser(u);
+        localStorage.setItem(SESSION_KEY, JSON.stringify(u));
+      } catch {
+        // If all else fails, use local mock data
+        const fallback = DEMO_PROFILES[role] as unknown as User;
+        setUser(fallback);
+        localStorage.setItem(SESSION_KEY, JSON.stringify(fallback));
+      }
     }
   };
 
-  const logout = async () => {
-    localStorage.removeItem(STORAGE_KEY);
+  const logout = async (): Promise<void> => {
+    localStorage.removeItem(SESSION_KEY);
+    sessionStorage.removeItem(SESSION_KEY);
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider
-      value={{ user, loading, login, register, loginAsDemo, logout, refresh }}
-    >
+    <AuthContext.Provider value={{ user, loading, login, register, loginAsDemo, logout, refresh }}>
       {children}
     </AuthContext.Provider>
   );
@@ -216,16 +217,10 @@ export function useAuth() {
 
 export function dashboardPath(role?: string) {
   switch (role) {
-    case 'STUDENT':
-      return '/student';
-    case 'FACULTY':
-      return '/faculty';
-    case 'INDUSTRY':
-      return '/industry';
-    case 'ADMIN':
-      return '/admin';
-    default:
-      return '/';
+    case 'STUDENT': return '/student';
+    case 'FACULTY': return '/faculty';
+    case 'INDUSTRY': return '/industry';
+    case 'ADMIN': return '/admin';
+    default: return '/';
   }
 }
-
